@@ -7,6 +7,8 @@ const db = require("../db");
 //create your router
 const companiesRouter = express.Router();
 
+const { NotFoundError } = require("../expressError");
+
 
 //get all companies
 companiesRouter.get("/", async function (req, res, next) {
@@ -25,7 +27,7 @@ companiesRouter.get("/", async function (req, res, next) {
 //get a company
 companiesRouter.get("/:code", async function (req, res, next) {
   try {
-    let code = req.params.code // Is it json or params?
+    const code = req.params.code // Is it json or params?
     const results = await db.query(
         `SELECT code, name, description
         FROM companies Where code = $1`, [code]);
@@ -41,20 +43,66 @@ companiesRouter.get("/:code", async function (req, res, next) {
 companiesRouter.post("/", async function (req, res, next) {
   console.log("creating a comp")
   try {
-    let code = req.body.code // Is it json or params?
-    let name = req.body.name
-    let description = req.body.description
+    const { code, name, description } = req.body;
     console.log("req ", req.body)
+
     const results = await db.query(
         `INSERT INTO companies (code, name, description)
         VALUES ($1, $2, $3) RETURNING code, name, description`, [code, name, description]);
+    
     const company = results.rows[0]
-    return res.status(201).json({ company });
 
+    return res.status(201).json({ company });
   } catch (err) {
     return next(err);
   }
 });
+
+
+/**  Put request - edit an existing company */
+companiesRouter.put('/:code', async function(req, res, next) {
+    try {
+        const { name, description } = req.body;
+        const code = req.params.code;
+
+        const results = await db.query(
+            `UPDATE companies
+            SET name = $1,
+                description = $2
+            WHERE code = $3
+            RETURNING code, name, description`,
+            [name, description, code]);
+        const company = results.rows[0];
+
+        if (!company) throw new NotFoundError();
+        return res.json({ company });
+
+    } catch (err) {
+        return next(err);
+    }
+});
+
+/** Delete request - delete an existing company */
+companiesRouter.delete('/:code', async function(req, res, next) {
+    try {
+        const code = req.params.code;
+
+        const results = await db.query(
+            `DELETE FROM companies 
+            WHERE code = $1
+            RETURNING code, name`,
+            [code]);
+        const deletedCompany = results.rows[0];
+        console.log('deletedCompany', deletedCompany);
+
+        if(!deletedCompany) throw new NotFoundError();
+
+        return res.json({ message: `Deleted ${deletedCompany.name}`});
+
+    } catch(err) {
+        return next(err);
+    }
+})
 
 //Export router
 module.exports = companiesRouter;
